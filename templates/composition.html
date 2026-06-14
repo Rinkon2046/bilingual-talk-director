@@ -1,0 +1,171 @@
+<!--
+  HyperFrames composition · "车内口播 / talking-head bilingual subtitle" 风格
+  ----------------------------------------------------------------------------
+  竖版 1080×1920。包含 4 个签名组件:
+    1) 顶部章节进度条 .chapter-bar
+    2) 底部双语字幕 .subtitle(中文大字 + 关键词橙色高亮 / 英文等宽小字)
+    3) 暗色引用/产品卡片 .card
+    4)(可选)强调大标题 .bigtitle —— 见 reference/scene-catalog.md
+
+  关键技术约定(HyperFrames):
+    - GSAP 时间轴必须 { paused:true },由框架按帧 seek 驱动播放
+    - 注册到 window.__timelines["<data-composition-id>"]
+    - 合成总时长 = 时间轴总时长;用 tl.set({},{},TOTAL) 把时长补到与背景视频一致
+    - 用 fromTo/set 设定初始态,保证任意帧 seek 可复现(只用 from 在 seek 渲染下会出错)
+    - 不要在脚本里 .play() / 设置 currentTime;媒体播放由框架接管
+    - 不要直接动画 <video> 的尺寸,要包一层 <div> 动画外层
+
+  本模板是一个 12 秒的可预览 demo(3 句字幕 + 1 张引用卡片 + 章节条)。
+  实际使用:把背景视频放到 assets/bg.mp4,按脚本增删字幕 .cue 与卡片,并把
+  时间轴末尾的 tl.set({},{},TOTAL) 与背景视频 data-duration 改成你的真实总时长。
+-->
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@500;700;900&display=swap');
+
+  :root{
+    /* —— 设计令牌(取自参考视频)—— */
+    --hl:#EC6A35;                 /* 关键词高亮 橙 */
+    --zh:#FFFFFF;                 /* 中文主字 */
+    --en:#C7C4BD;                 /* 英文译文 灰 */
+    --label:#9A958B;             /* 章节/卡片标签 灰 */
+    --card-bg:rgba(22,20,18,0.86);
+    --card-border:rgba(255,255,255,0.10);
+    --pill-bg:rgba(236,106,53,0.16);
+    --track:rgba(255,255,255,0.16);
+    --font-zh:"Noto Sans SC",sans-serif;
+    --font-mono:"JetBrains Mono","Roboto Mono",monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  #root{position:relative;width:1080px;height:1920px;overflow:hidden;background:#000;
+    font-family:var(--font-zh)}
+
+  /* 背景口播视频 —— 满屏裁切 */
+  .bg-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  /* 底部压暗,保证字幕可读 */
+  .scrim{position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(to bottom,rgba(0,0,0,.28) 0%,rgba(0,0,0,0) 26%,rgba(0,0,0,0) 55%,rgba(0,0,0,.62) 100%)}
+
+  /* —— ① 顶部章节进度条 —— */
+  .chapter-bar{position:absolute;top:46px;left:40px;right:40px;display:flex;gap:22px}
+  .chapter{flex:1;font-family:var(--font-mono);font-size:21px;letter-spacing:.02em;color:var(--label)}
+  .chapter .lab{display:block;margin-bottom:10px;white-space:nowrap;font-weight:500}
+  .chapter .track{height:4px;border-radius:4px;background:var(--track);overflow:hidden}
+  .chapter .fill{height:100%;background:var(--hl);transform:scaleX(0);transform-origin:left}
+  .chapter.done .lab{color:#E9E6E0}
+  .chapter.done .fill{transform:scaleX(1)}
+  .chapter.active .lab{color:#fff;font-weight:600}
+
+  /* —— ② 底部双语字幕 —— */
+  .subtitle{position:absolute;left:60px;right:60px;bottom:150px;text-align:center}
+  .cue{position:absolute;left:0;right:0;bottom:0;opacity:0}
+  .cue .zh{font-family:var(--font-zh);font-weight:900;color:var(--zh);
+    font-size:62px;line-height:1.28;text-shadow:0 3px 22px rgba(0,0,0,.55)}
+  .cue .en{font-family:var(--font-mono);font-weight:500;color:var(--en);
+    font-size:30px;line-height:1.45;letter-spacing:.02em;margin-top:14px;text-shadow:0 2px 14px rgba(0,0,0,.5)}
+  .hl{color:var(--hl)}
+
+  /* —— ③ 暗色引用 / 产品卡片 —— */
+  .card{position:absolute;left:46px;right:46px;top:150px;opacity:0;
+    background:var(--card-bg);border:1px solid var(--card-border);border-radius:26px;
+    padding:22px;backdrop-filter:blur(8px);box-shadow:0 24px 60px rgba(0,0,0,.45)}
+  .card-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .card-head .dot{width:10px;height:10px;border-radius:50%;background:var(--hl)}
+  .card-head .src{font-family:var(--font-mono);font-size:22px;color:var(--label);letter-spacing:.04em}
+  .card-head .pill{margin-left:auto;font-family:var(--font-mono);font-size:20px;color:var(--hl);
+    background:var(--pill-bg);border-radius:999px;padding:6px 16px}
+  .card-media{width:100%;border-radius:14px;display:block;background:#000}
+  .card-quote{font-family:var(--font-mono);font-size:30px;line-height:1.5;color:#EDEAE3;
+    letter-spacing:.01em;margin-top:18px}
+
+  /* —— ④ 强调大标题(可选)—— */
+  .bigtitle{position:absolute;left:70px;right:70px;top:560px;opacity:0;
+    font-family:var(--font-zh);font-weight:900;color:#fff;font-size:96px;line-height:1.18;
+    text-shadow:0 4px 30px rgba(0,0,0,.5)}
+</style>
+</head>
+<body>
+
+<div id="root" data-composition-id="root" data-start="0" data-width="1080" data-height="1920">
+
+  <!-- 背景口播视频(保留原声做配音;如需单独配音见 README)。time track 0 -->
+  <video class="bg-video" src="../assets/bg.mp4" playsinline
+         data-start="0" data-duration="12" data-track-index="0"></video>
+
+  <!-- 所有叠加层放进一个常驻容器,由 GSAP 控制显隐。track 1 -->
+  <div class="overlays" data-start="0" data-duration="12" data-track-index="1">
+    <div class="scrim"></div>
+
+    <!-- ① 章节进度条:6 章。active=当前章,done=已完成章 -->
+    <div class="chapter-bar">
+      <div class="chapter done"><span class="lab">开场</span><div class="track"><div class="fill"></div></div></div>
+      <div class="chapter active"><span class="lab">坑 1-3</span><div class="track"><div class="fill"></div></div></div>
+      <div class="chapter"><span class="lab">坑 4-6</span><div class="track"><div class="fill"></div></div></div>
+      <div class="chapter"><span class="lab">坑 7-8</span><div class="track"><div class="fill"></div></div></div>
+      <div class="chapter"><span class="lab">坑 9-10</span><div class="track"><div class="fill"></div></div></div>
+      <div class="chapter"><span class="lab">护城河</span><div class="track"><div class="fill"></div></div></div>
+    </div>
+
+    <!-- ③ 引用卡片(图片 + 引文)——在第 2 句期间出现 -->
+    <div class="card" id="card">
+      <div class="card-head">
+        <span class="dot"></span>
+        <span class="src">Naval · Modern Wisdom</span>
+        <span class="pill">原片</span>
+      </div>
+      <img class="card-media" src="../assets/quote.jpg" alt="" />
+      <div class="card-quote">find what feels like play to you, then <span class="hl">productize yourself</span></div>
+    </div>
+
+    <!-- ② 底部双语字幕:每句一个 .cue -->
+    <div class="subtitle">
+      <div class="cue" id="cue1">
+        <div class="zh">天天把 <span class="hl">AI</span> 塞进别人的业务里</div>
+        <div class="en">shoving <span class="hl">AI</span> into other people's business</div>
+      </div>
+      <div class="cue" id="cue2">
+        <div class="zh">公司的本质其实是<span class="hl">销售</span></div>
+        <div class="en">the essence of a company is <span class="hl">selling</span></div>
+      </div>
+      <div class="cue" id="cue3">
+        <div class="zh">建立你自己的职业<span class="hl">护城河</span></div>
+        <div class="en">build your own career <span class="hl">moat</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+<script>
+  // 暂停的时间轴,由框架按帧 seek 驱动
+  const tl = gsap.timeline({ paused: true });
+
+  // —— ① 当前章节进度条:0→12s 填满 ——
+  tl.to('.chapter.active .fill', { scaleX: 1, duration: 12, ease: 'none' }, 0);
+
+  // —— ② 字幕逐句进出(用 fromTo/set 保证可 seek 复现)——
+  // cue1  0–4s
+  tl.fromTo('#cue1', { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: .35, ease: 'power2.out' }, 0);
+  tl.to('#cue1', { opacity: 0, duration: .3 }, 3.7);
+  // cue2  4–8s
+  tl.fromTo('#cue2', { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: .35, ease: 'power2.out' }, 4);
+  tl.to('#cue2', { opacity: 0, duration: .3 }, 7.7);
+  // cue3  8–12s
+  tl.fromTo('#cue3', { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: .35, ease: 'power2.out' }, 8);
+  tl.to('#cue3', { opacity: 0, duration: .3 }, 11.7);
+
+  // —— ③ 引用卡片 4.4–7.6s 出现 ——
+  tl.fromTo('#card', { opacity: 0, scale: .96, y: 22 }, { opacity: 1, scale: 1, y: 0, duration: .45, ease: 'power2.out' }, 4.4);
+  tl.to('#card', { opacity: 0, scale: .985, duration: .35 }, 7.55);
+
+  // —— 把合成总时长补到 12s(必须 = 背景视频 data-duration)——
+  tl.set({}, {}, 12);
+
+  window.__timelines = window.__timelines || {};
+  window.__timelines['root'] = tl;
+</script>
+</body>
+</html>
