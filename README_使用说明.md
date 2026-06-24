@@ -51,10 +51,11 @@ Codex 会:复制 `templates/composition.html` → 按脚本填 `.cue` 和卡片 
 ## 五、自己手动做(不依赖代理)
 1. 复制 `templates/composition.html` 到 `compositions/index.html`。
 2. 把 `assets/bg.mp4` 换成你的出镜视频;按 `reference/scene-catalog.md` 增删 `.cue`/卡片。
-3. 改 GSAP 时间轴里的进出时间;**把结尾 `tl.set({},{},12)` 的 12 改成真实总秒数**,
+3. 字幕尽量保持单行:中文一行、英文一行。长句先拆成更短 cue;单行略超宽时缩小字号,不要默认换成两行。
+4. 改 GSAP 时间轴里的进出时间;**把结尾 `tl.set({},{},12)` 的 12 改成真实总秒数**,
    并同步改 `<video data-duration>` 与 `.overlays data-duration`。
-4. 预览:`npx hyperframes preview`(浏览器逐帧看,热更新)。
-5. 渲染:`npx hyperframes render --output out.mp4`。
+5. 预览:`npx hyperframes preview`(浏览器逐帧看,热更新)。
+6. 渲染:`npx hyperframes render --output out.mp4`。
 
 ## 六、配音轨(可选)
 默认用出镜视频原声。若要单独配音:
@@ -68,6 +69,7 @@ Codex 会:复制 `templates/composition.html` → 按脚本填 `.cue` 和卡片 
 - **视频被提前截断** → 时间轴总时长 < 视频时长。结尾补 `tl.set({}, {}, 真实总秒数)`,并让 `data-duration` 一致。
 - **该隐藏的字幕却一直显示** → 用了 `from` 而非 `fromTo/set`。所有 `.cue/.card` 必须有明确初始 `opacity:0`,进场用 `fromTo`。
 - **中文不显示/字体不对** → 渲染机器要能加载 `Noto Sans SC`(联网或自托管字体);建议把字体文件放进 assets 并用 `@font-face` 自托管以保证可复现。
+- **字幕换成两行/和口播节奏不贴** → cue 太长。按语音停顿重新切短,保持中文一行、英文一行;必要时动态降低字号。
 - **卡片/视频闪烁** → 不要直接动画 `<video>` 尺寸;不要在脚本里 `.play()`。
 
 ## 八、字体

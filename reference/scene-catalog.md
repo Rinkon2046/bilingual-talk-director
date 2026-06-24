@@ -35,6 +35,7 @@ tl.fromTo('.c1 .fill', {scaleX:0}, {scaleX:1, duration:55, ease:'none'}, 60);
 
 ## ② 双语字幕 cue(主力,逐句)
 每句一个 `.cue`,中文 `.zh` + 英文 `.en`,关键词 `.hl`。
+默认中文一行、英文一行,不要自动换行。长句优先切成更短 cue;单行略超宽时用动态字号适配。
 
 HTML:
 ```html

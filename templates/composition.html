@@ -63,9 +63,9 @@
   .subtitle{position:absolute;left:60px;right:60px;bottom:150px;text-align:center}
   .cue{position:absolute;left:0;right:0;bottom:0;opacity:0}
   .cue .zh{font-family:var(--font-zh);font-weight:900;color:var(--zh);
-    font-size:62px;line-height:1.28;text-shadow:0 3px 22px rgba(0,0,0,.55)}
+    font-size:62px;line-height:1.28;white-space:nowrap;text-shadow:0 3px 22px rgba(0,0,0,.55)}
   .cue .en{font-family:var(--font-mono);font-weight:500;color:var(--en);
-    font-size:30px;line-height:1.45;letter-spacing:.02em;margin-top:14px;text-shadow:0 2px 14px rgba(0,0,0,.5)}
+    font-size:30px;line-height:1.45;letter-spacing:.02em;margin-top:14px;white-space:nowrap;text-shadow:0 2px 14px rgba(0,0,0,.5)}
   .hl{color:var(--hl)}
 
   /* —— ③ 暗色引用 / 产品卡片 —— */
@@ -140,6 +140,21 @@
 
 <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
 <script>
+  // 单行字幕适配:优先保持中文一行、英文一行;超宽时缩小字号,不自动换行。
+  function fitCueText() {
+    document.querySelectorAll('.cue .zh, .cue .en').forEach((el) => {
+      const isZh = el.classList.contains('zh');
+      const base = isZh ? 62 : 30;
+      const min = isZh ? 44 : 20;
+      el.style.fontSize = `${base}px`;
+      while (el.scrollWidth > el.clientWidth && parseFloat(el.style.fontSize) > min) {
+        el.style.fontSize = `${parseFloat(el.style.fontSize) - 2}px`;
+      }
+    });
+  }
+  fitCueText();
+  document.fonts?.ready?.then(fitCueText);
+
   // 暂停的时间轴,由框架按帧 seek 驱动
   const tl = gsap.timeline({ paused: true });
 
